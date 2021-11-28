@@ -72,6 +72,7 @@ def do_transaction(*t):
                     ts += 1
                 tts[i][2] = ts
                 del m[i]
+                continue
         except RollbackTransaction:
             print(f'Transaction {i} rollbacks')
             temp = rw[i]
@@ -86,6 +87,7 @@ def do_transaction(*t):
                     tts[i][2] = ts
                     del m[i]
                     break
+            continue
         ts += 1
 
     print('After:')
