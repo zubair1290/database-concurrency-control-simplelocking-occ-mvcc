@@ -4,7 +4,8 @@ class RollbackTransaction(RuntimeError):
 
 class Transaction:
 
-    def __init__(self, f):
+    def __init__(self, name, f):
+        self.name = name
         self._f = f
 
     def start(self):

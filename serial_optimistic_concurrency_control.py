@@ -33,18 +33,18 @@ def do_transaction(*t):
             nonlocal val
             op, args = v
             if op == OP_READ:
-                print(f'Transaction {i} reads {args[0]}')
+                print(f'{ts}: Transaction {m[i].name} reads {args[0]}')
                 rw[i][0].add(args[0])
                 return data[args[0]]
             elif op == OP_WRITE:
-                print(f'Transaction {i} writes {args[0]}')
+                print(f'{ts}: Transaction {m[i].name} writes {args[0]}')
                 rw[i][1].add(args[0])
                 data[args[0]] = args[1]
             elif op == OP_COMMIT:
-                print(f'Transaction {i} commits')
+                print(f'{ts}: Transaction {m[i].name} commits')
                 pass
             elif op == OP_VALIDATE:
-                print(f'Transaction {i} validates')
+                print(f'{ts}: Transaction {m[i].name} validates')
                 t = tts[i]
                 t[1] = ts
                 for k, x in tts.items():
@@ -68,13 +68,13 @@ def do_transaction(*t):
                 del m[i]
             if val:
                 # Write is atomic
+                ts += 1
                 while not x.process(cb(i)):
                     ts += 1
                 tts[i][2] = ts
                 del m[i]
-                continue
         except RollbackTransaction:
-            print(f'Transaction {i} rollbacks')
+            print(f'{ts}: Transaction {x.name} rollbacks')
             temp = rw[i]
             temp[0].clear()
             temp[1].clear()
@@ -87,6 +87,7 @@ def do_transaction(*t):
                     tts[i][2] = ts
                     del m[i]
                     break
+                ts += 1
             continue
         ts += 1
 
@@ -116,7 +117,26 @@ def main():
         yield (OP_WRITE, ('B', b))
         yield (OP_COMMIT, ())
 
-    do_transaction(Transaction(T1), Transaction(T2))
+    def T3():
+        d = (yield (OP_READ, ('D',)))
+        d += 1
+        yield (OP_VALIDATE, ())
+        yield (OP_WRITE, ('C', 5))
+        yield (OP_WRITE, ('D', d))
+        yield (OP_COMMIT, ())
+
+    def T4():
+        b = (yield (OP_READ, ('B',)))
+        yield (OP_VALIDATE, ())
+        yield (OP_WRITE, ('D', b))
+        yield (OP_COMMIT, ())
+
+    do_transaction(
+        Transaction('T1', T1),
+        Transaction('T2', T2),
+        Transaction('T3', T3),
+        Transaction('T4', T4),
+    )
 
 if __name__ == '__main__':
     main()

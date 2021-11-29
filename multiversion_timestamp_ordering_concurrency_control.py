@@ -1,5 +1,6 @@
 from transaction import Transaction, RollbackTransaction
 import random
+from collections import deque
 
 
 OP_READ = 1
@@ -29,10 +30,10 @@ class Record:
 def do_transaction(*t):
 
     data = {
-        'A': [Record(0, -1, -1)],
-        'B': [Record(0, -1, -1)],
-        'C': [Record(0, -1, -1)],
-        'D': [Record(0, -1, -1)],
+        'A': deque([Record(0, -1, -1)]),
+        'B': deque([Record(0, -1, -1)]),
+        'C': deque([Record(0, -1, -1)]),
+        'D': deque([Record(0, -1, -1)]),
     }
 
     ts = 0
@@ -43,7 +44,7 @@ def do_transaction(*t):
         def f(v):
             op, args = v
             if op == OP_READ:
-                print(f'Transaction {i} reads {args[0]}')
+                print(f'Transaction {m[i].name} reads {args[0]}')
                 t = tts[i]
                 for x in data[args[0]]:
                     if x.wt > t:
@@ -52,7 +53,7 @@ def do_transaction(*t):
                 r.rt = max(r.rt, t)
                 return r.v
             elif op == OP_WRITE:
-                print(f'Transaction {i} writes {args[0]}')
+                print(f'Transaction {m[i].name} writes {args[0]}')
                 t = tts[i]
                 l = data[args[0]]
                 for x in l:
@@ -65,11 +66,16 @@ def do_transaction(*t):
                     r.v = args[1]
                 else:
                     r = Record(r)
-                    r.wt = t
+                    r.rt = r.wt = t
                     r.v = args[1]
-                    l.append(r)
+                    for i_, x in enumerate(l):
+                        if x.wt > t:
+                            l.insert(i_, r)
+                            break
+                    else:
+                        l.append(r)
             elif op == OP_COMMIT:
-                print(f'Transaction {i} commits')
+                print(f'Transaction {m[i].name} commits at {tts[i]}')
                 pass
         return f
 
@@ -78,13 +84,14 @@ def do_transaction(*t):
         x = m[i]
         try:
             if tts[i] is None:
+                print(f'Transaction {x.name} starts at {ts}')
                 tts[i] = ts
                 ts += 1
                 x.start()
             if x.process(cb(i)):
                 del m[i]
         except RollbackTransaction:
-            print(f'Transaction {i} rollbacks')
+            print(f'Transaction {x.name} rollbacks')
             t = tts[i]
             for l in data.values():
                 for i_ in range(len(l)):
@@ -117,7 +124,24 @@ def main():
         yield (OP_WRITE, ('B', b))
         yield (OP_COMMIT, ())
 
-    do_transaction(Transaction(T1), Transaction(T2))
+    def T3():
+        d = (yield (OP_READ, ('D',)))
+        d += 1
+        yield (OP_WRITE, ('C', 5))
+        yield (OP_WRITE, ('D', d))
+        yield (OP_COMMIT, ())
+
+    def T4():
+        b = (yield (OP_READ, ('B',)))
+        yield (OP_WRITE, ('D', b))
+        yield (OP_COMMIT, ())
+
+    do_transaction(
+        Transaction('T1', T1),
+        Transaction('T2', T2),
+        Transaction('T3', T3),
+        Transaction('T4', T4),
+    )
 
 if __name__ == '__main__':
     main()
